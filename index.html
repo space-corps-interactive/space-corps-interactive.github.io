@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GALAXY CUBE</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+<style>
+:root{
+  --bg:#07090d;
+  --fg:#f4f7f8;
+  --muted:rgba(244,247,248,.58);
+  --line:rgba(244,247,248,.72);
+  --soft:rgba(244,247,248,.12);
+  --accent:#7df9ff;
+}
+
+*{
+  box-sizing:border-box;
+  user-select:none;
+  -webkit-user-select:none;
+}
+
+html,body{
+  margin:0;
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  background:var(--bg);
+  color:var(--fg);
+  font-family:Inter,system-ui,sans-serif;
+}
+
+body {
+  background-image: url('bg.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-color: var(--bg);
+}
+
+.stage{
+  position:relative;
+  width:100vw;
+  height:100vh;
+  display:grid;
+  place-items:center;
+  perspective:2500px;
+  touch-action:none;
+  z-index: 10;
+}
+
+.hint{
+  position:fixed;
+  top:24px;
+  left:50%;
+  transform:translateX(-50%);
+  z-index:50;
+  color:var(--muted);
+  font-size:11px;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  transition:opacity .4s;
+  pointer-events:none;
+}
+
+.corner{
+  position:fixed;
+  bottom:24px;
+  left:50%;
+  color:rgba(255,255,255,.25);
+  font-size:10px;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  transform:translateX(-50%);
+  z-index:50;
+}
+
+.cube-wrap{
+  width:240px;
+  height:240px;
+  position:relative;
+  transform-style:preserve-3d;
+  transition:transform 1.2s cubic-bezier(.18,.82,.2,1);
+}
+
+.cube-wrap.zooming{
+  transform:scale(3.5);
+}
+
+/* Overrides scale ONLY when the selected face is the Projects face */
+/* Replace '.front' with whichever face class corresponds to Projects (e.g., .right, .top, etc.) */
+.cube-wrap.zooming:has(.front.selected),
+.cube-wrap.zooming:has(#projects.selected) {
+  transform: scale(10);
+}
+
+.cube{
+  width:100%;
+  height:100%;
+  position:relative;
+  transform-style:preserve-3d;
+  cursor:grab;
+  will-change:transform;
+}
+
+.cube.dragging{
+  cursor:grabbing;
+}
+
+.face{
+  position:absolute;
+  width:240px;
+  height:240px;
+  inset:0;
+  border:1.5px solid var(--line);
+  transform-style:preserve-3d;
+  backface-visibility:hidden;
+  -webkit-backface-visibility:hidden;
+  cursor:pointer;
+  overflow:hidden;
+  background:rgba(12,16,23,0.8);
+  transition:
+    opacity .6s ease,
+    background .4s ease,
+    border-color .4s ease,
+    box-shadow .4s ease;
+}
+
+.face::before{
+  content:"";
+  position:absolute;
+  inset:6px;
+  border:1px solid rgba(255,255,255,.08);
+  pointer-events:none;
+  z-index:20;
+  transition: opacity .4s ease;
+}
+
+/* Hide face background and borders when active/expanded */
+.face.projects-expanding{
+  border-color: transparent !important;
+  background: transparent !important;
+  transition: border-color 2s ease, background 2s ease;
+}
+
+.face.projects-expanding::before{
+  opacity: 0 !important;
+}
+
+/* Instantly fade the label out ONLY on the Projects face when clicked */
+.face.projects .face-label.fade-out,
+.face[data-face="projects"] .face-label.fade-out {
+  opacity: 0 !important;
+  transform: scale(0.9) !important;
+  transition: opacity 0.15s ease 0s, transform 0.15s ease 0s !important;
+}
+
+.cube-wrap:not(.zooming) .face:hover {
+  border-color:var(--accent);
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.front{background:rgba(32, 42, 58, 0.65);}
+.back-face{background:rgba(32, 42, 58, 0.65);}
+.right{background:rgba(32, 42, 58, 0.65);}
+.left{background:rgba(32, 42, 58, 0.65);}
+.top{background:rgba(32, 42, 58, 0.65);}
+.bottom{background:rgba(32, 42, 58, 0.65);}
+
+.face-label{
+  position:absolute;
+  inset:0;
+  display:grid;
+  place-items:center;
+  pointer-events:none;
+  font-size:15px;
+  letter-spacing:.2em;
+  text-transform:uppercase;
+  text-shadow:0 2px 15px #000;
+  transition:opacity .4s ease, transform .4s ease;
+  z-index:5;
+}
+
+.face-label.hidden{
+  opacity:0;
+  transform:translateY(-10px);
+}
+
+.cube.zooming .face:not(.selected){
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none !important;
+}
+
+.face.selected{
+  z-index:9999 !important;
+  pointer-events:auto !important;
+  backface-visibility:hidden;
+  -webkit-backface-visibility:hidden;
+  transform-style:flat;
+}
+
+.face-content{
+  position:fixed;
+  inset:0;
+  z-index:10000;
+  padding:24px;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .5s ease;
+}
+
+.face-content.visible{
+  opacity:1;
+  pointer-events:auto;
+}
+
+.web-top{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  position:relative;
+  z-index:10001;
+}
+
+.web-kicker{
+  color:var(--accent);
+  font-size:12px;
+  letter-spacing:.15em;
+  text-transform:uppercase;
+}
+
+.btn-back{
+  border:1px solid rgba(255,255,255,.3);
+  background:rgba(0,0,0,.6);
+  color:var(--fg);
+  padding:6px 14px;
+  cursor:pointer;
+  text-transform:uppercase;
+  font-size:11px;
+  letter-spacing:.1em;
+  transition:.25s ease;
+  pointer-events:auto !important;
+  backdrop-filter: blur(8px);
+}
+
+.btn-back:hover{
+  border-color:var(--accent);
+  color:var(--accent);
+  background:rgba(125,249,255,.2);
+}
+
+/* FULLSCREEN TUNNEL CONTAINER BACKGROUND */
+#tunnelPortal{
+  position:fixed;
+  inset:0;
+  width:100vw;
+  height:100vh;
+  opacity:0;
+  pointer-events:none;
+  z-index:1;
+  transition: opacity 3.5s ease;
+}
+
+#tunnelPortal.active{
+  opacity:1;
+  pointer-events:auto;
+}
+
+#tunnelPortal canvas{
+  width:100% !important;
+  height:100% !important;
+  display:block;
+}
+
+@media (max-width:700px){
+  .cube-wrap{
+    width:180px;
+    height:180px;
+  }
+  .face{
+    width:180px;
+    height:180px;
+  }
+}
+
+.webgl {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100vw;
+	height: 100vh;
+	background: transparent;
+	z-index: 1; /* Adjust relative to your HTML background container */
+}
+
+</style>
+</head>
+<body>
+
+<div id="tunnelPortal"></div>
+
+<div class="stage" id="stage">
+  <div class="hint" id="hint"></div>
+  <div class="cube-wrap" id="cubeWrap">
+    <div class="cube" id="cube">
+      <div class="face front" data-page="projects">
+        <span class="face-label">Projects</span>
+      </div>
+      <div class="face back-face" data-page="about">
+        <span class="face-label">About</span>
+      </div>
+      <div class="face right" data-page="work">
+        <span class="face-label">Work</span>
+      </div>
+      <div class="face left" data-page="contact">
+        <span class="face-label">Contact</span>
+      </div>
+      <div class="face top" data-page="ideas">
+        <span class="face-label">Ideas</span>
+      </div>
+      <div class="face bottom" data-page="other">
+        <span class="face-label">Other</span>
+      </div>
+    </div>
+  </div>
+  <div class="face-content" id="faceContent"></div>
+</div>
+
+<div class="corner">Everything that can happen, will happen</div>
+
+<script type="module" src="./tunnel.js"></script>
+
+<script>
+(() => {
+const stage = document.getElementById('stage');
+const cube = document.getElementById('cube');
+const cubeWrap = document.getElementById('cubeWrap');
+const hint = document.getElementById('hint');
+const faces = [...document.querySelectorAll('.face')];
+const faceContent = document.getElementById('faceContent');
+const tunnelPortal = document.getElementById('tunnelPortal');
+
+const faceRotations = {
+  projects: {x: 0, y: 0},
+  about:    {x: 0, y: 180},
+  work:     {x: 0, y: -90},
+  contact:  {x: 0, y: 90},
+  ideas:    {x: -90, y: 0},
+  other:    {x: 90, y: 0}
+};
+
+let rotX = -18;
+let rotY = -32;
+let targetX = rotX;
+let targetY = rotY;
+
+let dragging = false;
+let wasDrag = false;
+let startX, startY;
+let startRotX, startRotY;
+
+let pageOpen = false;
+let pageAnimating = false;
+let currentSelectedFace = null;
+let activeFaceOriginalTransform = '';
+let autoSpinEnabled = true;
+
+const pages = {
+  projects: { kicker: '01 / Selected Work', title: '', lead: '' },
+  about: { kicker: '02 / About', title: 'About', lead: "Information and overview." },
+  work: { kicker: '03 / Work', title: 'Work', lead: "Selected clients and roles." },
+  contact: { kicker: '04 / Contact', title: 'Contact', lead: 'Email, socials and booking information.' },
+  ideas: { kicker: '05 / Ideas', title: 'Ideas', lead: 'Experiments and future concepts.' },
+  other: { kicker: '06 / Other', title: 'Other', lead: 'Archive, resources or something else.' }
+};
+
+function sizeCube(){
+  const z = cubeWrap.offsetWidth / 2;
+  faces.forEach(face => {
+    let tr = '';
+    if(face.classList.contains('front')) tr = `rotateY(0deg) translateZ(${z}px)`;
+    if(face.classList.contains('back-face')) tr = `rotateY(180deg) translateZ(${z}px)`;
+    if(face.classList.contains('right')) tr = `rotateY(90deg) translateZ(${z}px)`;
+    if(face.classList.contains('left')) tr = `rotateY(-90deg) translateZ(${z}px)`;
+    if(face.classList.contains('top')) tr = `rotateX(90deg) translateZ(${z}px)`;
+    if(face.classList.contains('bottom')) tr = `rotateX(-90deg) translateZ(${z}px)`;
+    face.dataset.baseTransform = tr;
+    if (face !== currentSelectedFace || !pageOpen) {
+      face.style.transform = tr;
+    }
+  });
+}
+
+function render(){
+  if (!pageOpen) {
+    if (autoSpinEnabled && !dragging && !pageAnimating) {
+      targetY += 0.15;
+    }
+
+    rotX += (targetX - rotX) * 0.12;
+    rotY += (targetY - rotY) * 0.12;
+    cube.style.transform = `rotateX(${rotX}deg) rotateY(${rotY}deg)`;
+  }
+  requestAnimationFrame(render);
+}
+
+function buildFacePage(container, key){
+  const page = pages[key];
+  container.innerHTML = `
+    <div class="web-top">
+      <div class="web-kicker">${page.kicker}</div>
+      <button class="btn-back" type="button">← Return</button>
+    </div>
+  `;
+
+  requestAnimationFrame(() => {
+    container.classList.add('visible');
+  });
+
+  const backBtn = container.querySelector('.btn-back');
+  if (backBtn) {
+    backBtn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closePage();
+    };
+  }
+}
+
+function openCubeFace(face){
+  if(pageOpen || pageAnimating) return;
+  pageAnimating = true;
+  autoSpinEnabled = false;
+  currentSelectedFace = face;
+  activeFaceOriginalTransform = face.dataset.baseTransform;
+
+  faces.forEach(f => f.classList.remove('selected'));
+  face.classList.add('selected');
+
+  const rotation = faceRotations[face.dataset.page];
+  targetX = rotation.x;
+  targetY = rotation.y;
+
+  hint.style.opacity = '0';
+
+  // 1. Zoom into selected face
+  setTimeout(() => {
+    cube.classList.add('zooming');
+    cubeWrap.classList.add('zooming');
+  }, 100);
+
+  // 2. Hide face frame and show tunnel portal + UI controls
+  setTimeout(() => {
+    const label = face.querySelector('.face-label');
+    const z = cubeWrap.offsetWidth / 2;
+    cube.style.transform = 'rotateX(0deg) rotateY(0deg)';
+    face.style.transform = `rotateY(0deg) translateZ(${z}px)`;
+
+    if(label) label.classList.add('hidden');
+    buildFacePage(faceContent, face.dataset.page);
+
+    if (face.dataset.page === "projects") {
+      face.classList.add('projects-expanding');
+      if (typeof window.mountTunnel === 'function') {
+        window.mountTunnel(tunnelPortal);
+        window.initTunnel();
+      }
+      tunnelPortal.classList.add("active");
+    }
+
+    pageOpen = true;
+    pageAnimating = false;
+  }, 1200);
+}
+
+function closePage(){
+  if(!pageOpen && !pageAnimating) return;
+  pageAnimating = true;
+
+  if (currentSelectedFace) {
+    const label = currentSelectedFace.querySelector('.face-label');
+
+    faceContent.classList.remove('visible');
+
+    if (currentSelectedFace.dataset.page === "projects") {
+      tunnelPortal.classList.remove("active");
+      if (typeof window.destroyTunnel === 'function') {
+        window.destroyTunnel();
+      }
+    }
+
+    cubeWrap.classList.remove('zooming');
+    cube.classList.remove('zooming');
+
+    const rotation = faceRotations[currentSelectedFace.dataset.page];
+    cube.style.transform = `rotateX(${rotation.x}deg) rotateY(${rotation.y}deg)`;
+    currentSelectedFace.style.transform = activeFaceOriginalTransform;
+
+    setTimeout(() => {
+      if (currentSelectedFace.dataset.page === "projects") {
+        currentSelectedFace.classList.remove('projects-expanding');
+      }
+
+      faceContent.innerHTML = '';
+      if (label) label.classList.remove('hidden');
+
+      faces.forEach(f => f.classList.remove('selected'));
+
+      hint.style.opacity = '1';
+      pageOpen = false;
+      pageAnimating = false;
+      currentSelectedFace = null;
+      autoSpinEnabled = true;
+    }, 1000);
+  }
+}
+
+stage.addEventListener('pointerdown', e => {
+  if (pageOpen || pageAnimating) return;
+  
+  autoSpinEnabled = false;
+  dragging = true;
+  wasDrag = false;
+  startX = e.clientX;
+  startY = e.clientY;
+  startRotX = targetX;
+  startRotY = targetY;
+});
+
+stage.addEventListener('pointermove', e => {
+  if(!dragging || pageOpen) return;
+
+  const dx = e.clientX - startX;
+  const dy = e.clientY - startY;
+
+  if(Math.abs(dx) > 5 || Math.abs(dy) > 5){
+    wasDrag = true;
+  }
+
+  targetY = startRotY + dx * 0.45;
+  targetX = startRotX - dy * 0.45;
+
+  targetX = Math.max(-75, Math.min(75, targetX));
+});
+
+stage.addEventListener('pointerup', () => {
+  dragging = false;
+  setTimeout(() => { wasDrag = false; }, 50);
+});
+
+faces.forEach(face => {
+  face.addEventListener('click', () => {
+    if(wasDrag || pageOpen || pageAnimating) return;
+    openCubeFace(face);
+  });
+});
+
+window.addEventListener('resize', sizeCube);
+
+sizeCube();
+render();
+})();
+</script>
+</body>
+</html>
